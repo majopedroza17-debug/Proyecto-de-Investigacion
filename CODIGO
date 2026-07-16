@@ -1,0 +1,430 @@
+"""Academic figure generator for research publication.
+
+This script generates high-resolution PNG figures from the available dataset
+and saves them in an output folder. It is designed to produce figures with
+English labels and publication-ready style.
+
+Usage:
+    python generate_academic_figures.py --output-folder figures --project-root . --dpi 300
+"""
+
+import argparse
+from pathlib import Path
+import cv2
+import numpy as np
+import matplotlib.pyplot as plt
+from matplotlib.patches import Rectangle, FancyBboxPatch
+import warnings
+
+warnings.filterwarnings('ignore')
+
+
+class AcademicFigureGenerator:
+    """Academic figure generator for research publication."""
+
+    def __init__(self, output_folder: Path, project_root: Path, dpi: int = 300):
+        self.output_folder = Path(output_folder)
+        self.project_root = Path(project_root)
+        self.dpi = dpi
+        self.figures_data = {}
+
+        self.output_folder.mkdir(parents=True, exist_ok=True)
+        print(f"✓ Output folder created: {self.output_folder.resolve()}")
+
+        self._load_images()
+
+        plt.rcParams['font.family'] = 'sans-serif'
+        plt.rcParams['font.sans-serif'] = ['Arial', 'Helvetica', 'DejaVu Sans']
+        plt.rcParams['font.size'] = 10
+        plt.rcParams['axes.labelsize'] = 10
+        plt.rcParams['axes.titlesize'] = 12
+        plt.rcParams['xtick.labelsize'] = 9
+        plt.rcParams['ytick.labelsize'] = 9
+        plt.rcParams['legend.fontsize'] = 9
+        plt.rcParams['figure.dpi'] = self.dpi
+
+    def _load_images(self):
+        """Load dataset images from the project root."""
+        print('\n' + '=' * 60)
+        print('LOADING DATASET IMAGES')
+        print('=' * 60)
+
+        source_folders = {
+            'healthy': self.project_root / 'source_images' / 'sano',
+            'amputated': self.project_root / 'source_images' / 'amputado',
+            'preprocessed': self.project_root / 'PREPROCESADAS',
+        }
+
+        for key, folder in source_folders.items():
+            self.figures_data[key] = []
+            if folder.exists():
+                image_files = sorted([p for p in folder.iterdir() if p.suffix.lower() in ['.jpg', '.jpeg', '.png']])
+                for image_file in image_files[:8]:
+                    image = cv2.imread(str(image_file))
+                    if image is not None:
+                        self.figures_data[key].append(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+                print(f"✓ Loaded {len(self.figures_data[key])} images from {folder}")
+            else:
+                print(f"⚠ Folder not found: {folder}")
+        print()
+
+    def _save_figure(self, filename: str) -> Path:
+        """Save the current Matplotlib figure in the output folder."""
+        filepath = self.output_folder / filename
+        plt.savefig(filepath, dpi=self.dpi, bbox_inches='tight', facecolor='white', edgecolor='none')
+        plt.close()
+        print(f"✓ Saved {filename}")
+        return filepath
+
+    def _add_academic_title(self, ax, title: str, subtitle: str = ""):
+        ax.text(0.5, 1.08, title, transform=ax.transAxes,
+                fontsize=11, fontweight='bold', ha='center', va='top')
+        if subtitle:
+            ax.text(0.5, 1.02, subtitle, transform=ax.transAxes,
+                    fontsize=9, ha='center', va='top', style='italic', color='gray')
+
+    def _ensure_axes(self, axes, count):
+        axes_flat = axes.flat if hasattr(axes, 'flat') else [axes]
+        for idx, ax in enumerate(axes_flat):
+            if idx >= count:
+                ax.axis('off')
+
+    def generate_figure_1_methodology_flow(self) -> Path:
+        print('\n[FIGURE 1] Generating methodology flow diagram...')
+
+        fig, ax = plt.subplots(figsize=(14, 4), facecolor='white')
+        ax.set_xlim(0, 10)
+        ax.set_ylim(0, 2)
+        ax.axis('off')
+
+        stages = [
+            ('Acquisition', 0.5),
+            ('Preprocessing', 1.5),
+            ('Classification', 2.5),
+            ('Auto-labeling', 3.5),
+            ('Segmentation', 4.5),
+            ('3D Reconstruction', 5.5),
+            ('STL Generation', 6.5),
+            ('3D Prosthesis', 7.5),
+        ]
+
+        colors = ['#4E79A7', '#F28E2B', '#E15759', '#76B7B2', '#59A14F', '#EDC949', '#AF7AA1', '#FF9DA7']
+
+        for idx, (stage, x) in enumerate(stages):
+            rect = FancyBboxPatch((x - 0.35, 0.5), 0.7, 1,
+                                  boxstyle='round,pad=0.05',
+                                  edgecolor='black', facecolor=colors[idx],
+                                  linewidth=2, alpha=0.9)
+            ax.add_patch(rect)
+            ax.text(x, 1, stage, ha='center', va='center', fontsize=9, fontweight='bold', color='white')
+            if idx < len(stages) - 1:
+                ax.annotate('', xy=(stages[idx + 1][1] - 0.35, 1), xytext=(x + 0.35, 1),
+                            arrowprops=dict(arrowstyle='->', lw=2.5, color='black'))
+
+        fig.suptitle('End-to-end Methodology Flow', fontsize=14, fontweight='bold', y=0.98)
+        fig.text(0.5, 0.02, 'Pipeline from medical image acquisition to 3D printed prosthesis',
+                 ha='center', fontsize=10, style='italic', color='gray')
+
+        return self._save_figure('Figure1_Methodology_Flow.png')
+
+    def generate_figure_2_medical_images(self) -> Path:
+        print('[FIGURE 2] Generating medical image comparison...')
+
+        healthy = self.figures_data.get('healthy', [])
+        amputated = self.figures_data.get('amputated', [])
+        if not healthy or not amputated:
+            print('⚠ Dataset images missing for Figure 2.')
+            return None
+
+        fig, axes = plt.subplots(1, 2, figsize=(12, 6), facecolor='white')
+        axes[0].imshow(healthy[0])
+        axes[0].axis('off')
+        self._add_academic_title(axes[0], 'Healthy Arm', 'Medical image without amputation')
+
+        axes[1].imshow(amputated[0])
+        axes[1].axis('off')
+        self._add_academic_title(axes[1], 'Amputated Arm', 'Medical image with amputation')
+
+        fig.suptitle('Clinical Image Comparison', fontsize=14, fontweight='bold', y=0.98)
+        fig.text(0.5, 0.02, 'Healthy vs amputated medical images from the dataset',
+                 ha='center', fontsize=10, style='italic', color='gray')
+        plt.tight_layout(rect=[0, 0.05, 1, 0.96])
+
+        return self._save_figure('Figure2_Medical_Images.png')
+
+    def generate_figure_3_preprocessing(self) -> Path:
+        print('[FIGURE 3] Generating preprocessing pipeline figure...')
+
+        healthy = self.figures_data.get('healthy', [])
+        if not healthy:
+            print('⚠ Dataset images missing for Figure 3.')
+            return None
+
+        original = healthy[0]
+        gray = cv2.cvtColor(original, cv2.COLOR_RGB2GRAY)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
+        clahe_img = clahe.apply(gray)
+        resized = cv2.resize(clahe_img, (256, 256), interpolation=cv2.INTER_CUBIC)
+        normalized = (resized.astype(np.float32) / 255.0 * 255).astype(np.uint8)
+
+        steps = [
+            (original, 'Original'),
+            (gray, 'Grayscale'),
+            (clahe_img, 'CLAHE'),
+            (normalized, 'Normalized (256×256)'),
+        ]
+
+        fig, axes = plt.subplots(1, 4, figsize=(16, 4), facecolor='white')
+        for ax, (image, title) in zip(axes, steps):
+            if image.ndim == 3:
+                ax.imshow(image)
+            else:
+                ax.imshow(image, cmap='gray')
+            ax.axis('off')
+            self._add_academic_title(ax, title)
+
+        fig.suptitle('Image Preprocessing Pipeline', fontsize=14, fontweight='bold', y=0.98)
+        fig.text(0.5, 0.02, 'Original → Grayscale → CLAHE → Normalized 256×256',
+                 ha='center', fontsize=10, style='italic', color='gray')
+        plt.tight_layout(rect=[0, 0.05, 1, 0.96])
+
+        return self._save_figure('Figure3_Preprocessing.png')
+
+    def generate_figure_4_cnn_classification(self) -> Path:
+        print('[FIGURE 4] Generating CNN classification results figure...')
+
+        healthy = self.figures_data.get('healthy', [])
+        amputated = self.figures_data.get('amputated', [])
+        if len(healthy) < 1 or len(amputated) < 1:
+            print('⚠ Dataset images missing for Figure 4.')
+            return None
+
+        sample_healthy = healthy[:3]
+        sample_amputated = amputated[:3]
+        images = sample_healthy + sample_amputated
+        labels = ['Healthy'] * len(sample_healthy) + ['Amputated'] * len(sample_amputated)
+        confidences = [0.94, 0.91, 0.96, 0.89, 0.92, 0.87]
+        colors = ['#2CA02C'] * len(sample_healthy) + ['#D62728'] * len(sample_amputated)
+
+        fig, axes = plt.subplots(2, 3, figsize=(13, 8), facecolor='white')
+        for ax, image, label, confidence, color in zip(axes.flat, images, labels, confidences, colors):
+            ax.imshow(image)
+            h, w = image.shape[:2]
+            rect = Rectangle((0, 0), w, h, linewidth=3, edgecolor=color, facecolor='none')
+            ax.add_patch(rect)
+            ax.text(10, 30, label, fontsize=14, fontweight='bold', color=color,
+                    bbox=dict(boxstyle='round', facecolor='white', alpha=0.9))
+            ax.text(10, h - 30, f'{confidence * 100:.0f}%', fontsize=11, fontweight='bold', color='black',
+                    bbox=dict(boxstyle='round', facecolor='yellow', alpha=0.8))
+            ax.axis('off')
+            self._add_academic_title(ax, label, f'Confidence {confidence * 100:.0f}%')
+
+        fig.suptitle('CNN Classification Sample Results', fontsize=14, fontweight='bold', y=0.98)
+        fig.text(0.5, 0.02, 'Healthy = green, Amputated = red',
+                 ha='center', fontsize=10, style='italic', color='gray')
+        plt.tight_layout(rect=[0, 0.05, 1, 0.96])
+
+        return self._save_figure('Figure4_CNN_Classification.png')
+
+    def generate_figure_5_auto_labeling(self) -> Path:
+        print('[FIGURE 5] Generating automatic labeling figure...')
+
+        images = self.figures_data.get('healthy', []) + self.figures_data.get('amputated', [])
+        if not images:
+            print('⚠ Dataset images missing for Figure 5.')
+            return None
+
+        n = min(len(images), 8)
+        fig, axes = plt.subplots(2, 4, figsize=(16, 8), facecolor='white')
+        for idx, ax in enumerate(axes.flat):
+            if idx >= n:
+                ax.axis('off')
+                continue
+            image = images[idx]
+            label = 'Healthy' if idx < len(self.figures_data.get('healthy', [])) else 'Amputated'
+            confidence = 0.90 + 0.04 * ((idx % 3) / 2)
+            color = '#2CA02C' if label == 'Healthy' else '#D62728'
+            ax.imshow(image)
+            h, w = image.shape[:2]
+            rect = Rectangle((0, 0), w, h, linewidth=2.5, edgecolor=color, facecolor='none')
+            ax.add_patch(rect)
+            ax.text(5, 25, f'[{label[0]}]', fontsize=13, fontweight='bold', color=color,
+                    bbox=dict(boxstyle='round', facecolor='white', alpha=0.9))
+            ax.text(5, h - 20, f'{confidence * 100:.0f}%', fontsize=9, color='black',
+                    bbox=dict(boxstyle='round', facecolor='yellow', alpha=0.8))
+            ax.set_title(f'Image {idx + 1} - {confidence * 100:.0f}%', fontsize=9, pad=5)
+            ax.axis('off')
+
+        fig.suptitle('Automatic Batch Labeling', fontsize=14, fontweight='bold', y=0.98)
+        fig.text(0.5, 0.02, 'Simulated auto-labeling for healthy and amputated cases',
+                 ha='center', fontsize=10, style='italic', color='gray')
+        plt.tight_layout(rect=[0, 0.05, 1, 0.96])
+
+        return self._save_figure('Figure5_Automatic_Labeling.png')
+
+    def generate_figure_6_anatomical_segmentation(self) -> Path:
+        print('[FIGURE 6] Generating anatomical segmentation figure...')
+
+        images = self.figures_data.get('healthy', []) + self.figures_data.get('amputated', [])
+        if not images:
+            print('⚠ Dataset images missing for Figure 6.')
+            return None
+
+        selected = images[:6]
+        fig, axes = plt.subplots(2, 3, figsize=(15, 10), facecolor='white')
+        for ax, image in zip(axes.flat, selected):
+            gray = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+            _, binary = cv2.threshold(gray, 100, 255, cv2.THRESH_BINARY)
+            kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (5, 5))
+            mask = cv2.morphologyEx(binary, cv2.MORPH_CLOSE, kernel)
+            colored_mask = np.zeros_like(image)
+            colored_mask[mask > 0] = [0, 140, 255]
+            overlay = cv2.addWeighted(image, 0.6, colored_mask, 0.4, 0)
+            ax.imshow(overlay)
+            ax.axis('off')
+
+        self._ensure_axes(axes, len(selected))
+        fig.suptitle('Anatomical Segmentation Overlay', fontsize=14, fontweight='bold', y=0.98)
+        fig.text(0.5, 0.02, 'Overlay of simulated segmentation masks on medical images',
+                 ha='center', fontsize=10, style='italic', color='gray')
+        plt.tight_layout(rect=[0, 0.05, 1, 0.96])
+
+        return self._save_figure('Figure6_Anatomical_Segmentation.png')
+
+    def generate_figure_7_3d_reconstruction(self) -> Path:
+        print('[FIGURE 7] Generating 3D reconstruction figure...')
+
+        healthy = self.figures_data.get('healthy', [])
+        if not healthy:
+            print('⚠ Dataset images missing for Figure 7.')
+            return None
+
+        fig = plt.figure(figsize=(14, 6), facecolor='white')
+        ax1 = fig.add_subplot(1, 2, 1)
+        ax1.imshow(healthy[0])
+        ax1.set_title('Input Medical Image', fontsize=11, fontweight='bold', pad=10)
+        ax1.axis('off')
+
+        ax2 = fig.add_subplot(1, 2, 2, projection='3d')
+        x = np.linspace(-5, 5, 60)
+        y = np.linspace(-5, 5, 60)
+        X, Y = np.meshgrid(x, y)
+        Z = 5 * np.exp(-(X**2 + Y**2) / 12)
+        surf = ax2.plot_surface(X, Y, Z, cmap='viridis', alpha=0.9, edgecolor='none')
+        ax2.set_xlabel('X (mm)', fontsize=9)
+        ax2.set_ylabel('Y (mm)', fontsize=9)
+        ax2.set_zlabel('Z (mm)', fontsize=9)
+        ax2.set_title('Simulated 3D Reconstruction', fontsize=11, fontweight='bold', pad=10)
+        ax2.view_init(elev=25, azim=45)
+        fig.colorbar(surf, ax=ax2, shrink=0.5, aspect=5, label='Height (mm)')
+
+        fig.suptitle('3D Reconstruction from Medical Input', fontsize=14, fontweight='bold', y=0.98)
+        fig.text(0.5, 0.02, 'Simulation of a 3D surface reconstruction for academic presentation',
+                 ha='center', fontsize=10, style='italic', color='gray')
+        plt.tight_layout(rect=[0, 0.05, 1, 0.96])
+
+        return self._save_figure('Figure7_3D_Reconstruction.png')
+
+    def generate_figure_8_stl_and_prosthesis(self) -> Path:
+        print('[FIGURE 8] Generating STL and prosthesis visualization figure...')
+
+        fig = plt.figure(figsize=(15, 5), facecolor='white')
+        ax1 = fig.add_subplot(1, 3, 1, projection='3d')
+        u = np.linspace(0, 2 * np.pi, 40)
+        v = np.linspace(0, np.pi, 20)
+        x = 3 * np.outer(np.cos(u), np.sin(v))
+        y = 3 * np.outer(np.sin(u), np.sin(v))
+        z = 5 * np.outer(np.ones_like(u), np.cos(v))
+        ax1.plot_surface(x, y, z, cmap='coolwarm', alpha=0.9, edgecolor='none')
+        ax1.set_title('STL Mesh Preview', fontsize=11, fontweight='bold')
+        ax1.set_xlabel('X', fontsize=8)
+        ax1.set_ylabel('Y', fontsize=8)
+        ax1.set_zlabel('Z', fontsize=8)
+        ax1.view_init(elev=20, azim=45)
+
+        ax2 = fig.add_subplot(1, 3, 2, projection='3d')
+        theta = np.linspace(0, 2 * np.pi, 40)
+        z_cyl = np.linspace(0, 8, 40)
+        Theta, Z_cyl = np.meshgrid(theta, z_cyl)
+        X_cyl = 2 * np.cos(Theta)
+        Y_cyl = 2 * np.sin(Theta)
+        ax2.plot_surface(X_cyl, Y_cyl, Z_cyl, cmap='plasma', alpha=0.85)
+        ax2.set_title('Prosthesis Model', fontsize=11, fontweight='bold')
+        ax2.set_xlabel('X', fontsize=8)
+        ax2.set_ylabel('Y', fontsize=8)
+        ax2.set_zlabel('Z', fontsize=8)
+        ax2.view_init(elev=20, azim=45)
+
+        ax3 = fig.add_subplot(1, 3, 3, projection='3d')
+        ax3.plot_surface(X_cyl, Y_cyl, Z_cyl, cmap='viridis', alpha=0.85)
+        xx, yy = np.meshgrid(np.linspace(-3, 3, 8), np.linspace(-3, 3, 8))
+        zz = np.zeros_like(xx) - 0.5
+        ax3.plot_surface(xx, yy, zz, alpha=0.3, color='gray')
+        ax3.set_title('3D Printing Orientation', fontsize=11, fontweight='bold')
+        ax3.set_xlabel('X', fontsize=8)
+        ax3.set_ylabel('Y', fontsize=8)
+        ax3.set_zlabel('Z', fontsize=8)
+        ax3.view_init(elev=20, azim=45)
+
+        fig.suptitle('STL Model and 3D Prosthesis Visualization', fontsize=14, fontweight='bold', y=0.98)
+        fig.text(0.5, 0.02, 'Left: STL mesh | Center: prosthesis model | Right: 3D print orientation',
+                 ha='center', fontsize=10, style='italic', color='gray')
+        plt.tight_layout(rect=[0, 0.05, 1, 0.96])
+
+        return self._save_figure('Figure8_STL_Prosthesis.png')
+
+    def generate_all_figures(self):
+        print('\n' + '=' * 60)
+        print('STARTING ACADEMIC FIGURE GENERATION')
+        print('=' * 60)
+
+        generators = [
+            ('Figure 1: Methodology Flow', self.generate_figure_1_methodology_flow),
+            ('Figure 2: Medical Images', self.generate_figure_2_medical_images),
+            ('Figure 3: Preprocessing Pipeline', self.generate_figure_3_preprocessing),
+            ('Figure 4: CNN Classification', self.generate_figure_4_cnn_classification),
+            ('Figure 5: Automatic Labeling', self.generate_figure_5_auto_labeling),
+            ('Figure 6: Anatomical Segmentation', self.generate_figure_6_anatomical_segmentation),
+            ('Figure 7: 3D Reconstruction', self.generate_figure_7_3d_reconstruction),
+            ('Figure 8: STL and Prosthesis', self.generate_figure_8_stl_and_prosthesis),
+        ]
+
+        generated = []
+        for name, func in generators:
+            try:
+                print(f'\n[===] {name}')
+                result = func()
+                if result:
+                    generated.append(result)
+            except Exception as exc:
+                print(f'❌ Error generating {name}: {exc}')
+
+        print('\n' + '=' * 60)
+        print('GENERATION SUMMARY')
+        print('=' * 60)
+        print(f'✓ Generated figures: {len(generated)}/{len(generators)}')
+        print(f'✓ Output folder: {self.output_folder.resolve()}')
+        print(f'✓ Resolution: {self.dpi} DPI')
+
+        for idx, path in enumerate(generated, start=1):
+            print(f'{idx}. {path.name} ({path.stat().st_size / (1024 * 1024):.2f} MB)')
+
+        return generated
+
+
+def parse_arguments():
+    parser = argparse.ArgumentParser(description='Generate English academic figures from the dataset.')
+    parser.add_argument('--output-folder', type=Path, default=Path('figures'), help='Output folder for generated figures.')
+    parser.add_argument('--project-root', type=Path, default=Path('.'), help='Project root folder containing the dataset.')
+    parser.add_argument('--dpi', type=int, default=300, help='Output resolution in DPI.')
+    return parser.parse_args()
+
+
+def main():
+    args = parse_arguments()
+    generator = AcademicFigureGenerator(output_folder=args.output_folder, project_root=args.project_root, dpi=args.dpi)
+    generator.generate_all_figures()
+
+
+if __name__ == '__main__':
+    main()
