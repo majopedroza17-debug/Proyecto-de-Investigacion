@@ -1,5 +1,3 @@
-# Proyecto-de-Investigacion
-Modelo de Deep Learning para la personalización automática de prótesis pasivas impresas en 3D a partir de imágenes medicas
 # 3D Prosthesis Research Repository
 
 This repository contains source code and dataset files for a 3D prosthesis research project.
